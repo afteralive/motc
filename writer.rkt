@@ -1,26 +1,40 @@
 #lang racket/base
 
 (provide
-    generate-data)
+    generate-mot/data
+    src-generate-mot/record
+    src-write-to)
 
 (require
+    racket/match
+
     "consts.rkt")
 
-(struct src-record-step (frame step) #:transparent)
-(struct src-record-posx (frame posx) #:transparent)
-(struct src-record-posy (frame posy) #:transparent)
+(struct src-mot/long (long) #:transparent)
 
-(struct src-record-part-dir (part frame dir) #:transparent)
-(struct src-record-part-dis (part frame dis) #:transparent)
-(struct src-record-part-angle (part frame angle) #:transparent)
-(struct src-record-part-picture (part frame picture) #:transparent)
-(struct src-record-part-scalex (part frame scalex) #:transparent)
-(struct src-record-part-scaley (part frame scaley) #:transparent)
+(struct src-mot/root-data (frame value) #:transparent)
+(struct src-mot/step src-mot/root-data () #:transparent)
+(struct src-mot/posx src-mot/root-data () #:transparent)
+(struct src-mot/posy src-mot/root-data () #:transparent)
 
-(struct src-motion-record (long data))
+(struct src-mot/part-data (part frame value) #:transparent)
+(struct src-mot/part/dir src-mot/part-data () #:transparent)
+(struct src-mot/part/dis src-mot/part-data () #:transparent)
+(struct src-mot/part/angle src-mot/part-data () #:transparent)
+(struct src-mot/part/picture src-mot/part-data () #:transparent)
+(struct src-mot/part/scalex src-mot/part-data () #:transparent)
+(struct src-mot/part/scaley src-mot/part-data () #:transparent)
+
+(struct src-mot/record (long data) #:transparent)
 
 (define (cmd-type cmd)
     (car cmd))
+
+(define (set-key cmd)
+    (cadr cmd))
+(define (set-value cmd)
+    (caddr cmd))
+
 (define (offset-key cmd)
     (cadr cmd))
 (define (offset-frame cmd)
@@ -33,32 +47,109 @@
 (define (surronding-cmds cmd)
     (caddr cmd))
 
-(define (generate-part-data cmds part)
+(define (generate-mot/part-data cmds part)
     (for/list ([cmd cmds])
         (case (offset-key cmd)
-            [("data_motPartPosDir") (src-record-part-dir part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartPosDis") (src-record-part-dis part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartAngle") (src-record-part-angle part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartScaleX") (src-record-part-scalex part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartScaleY") (src-record-part-scaley part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartPicture") (src-record-part-picture part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartPosDir") (src-mot/part/dir part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartPosDis") (src-mot/part/dis part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartAngle") (src-mot/part/angle part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartScaleX") (src-mot/part/scalex part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartScaleY") (src-mot/part/scaley part (offset-frame cmd) (offset-value cmd))]
+            [("data_motPartPicture") (src-mot/part/picture part (offset-frame cmd) (offset-value cmd))]
         )))
-(define (generate-root-data cmd)
+(define (generate-mot/root-data cmd)
     (case (offset-key cmd)
-        [("data_motStep") (src-record-step (offset-frame cmd) (offset-value cmd))]
-        [("data_motPosX") (src-record-posx (offset-frame cmd) (offset-value cmd))]
-        [("data_motPosY") (src-record-posy (offset-frame cmd) (offset-value cmd))]
+        [("data_motStep") (src-mot/step (offset-frame cmd) (offset-value cmd))]
+        [("data_motPosX") (src-mot/posx (offset-frame cmd) (offset-value cmd))]
+        [("data_motPosY") (src-mot/posy (offset-frame cmd) (offset-value cmd))]
     ))
-(define (generate-data cmds)
-    (for/list ([cmd
-                (filter
-                    (lambda (cmd)
-                        (or (eq? (car cmd) 'set-offset) (eq? (car cmd) 'with-surronding)))
-                    cmds)])
-        (cond
-            [(eq? (cmd-type cmd) 'set-offset) (generate-root-data cmd)]
-            [else (generate-part-data (surronding-cmds cmd) (surronding-part cmd))])
-        ;;; (case (cmd-type cmd)
-        ;;;     [('set-offset) cmd]
-        ;;;     [('with-surronding) (generate-part-data (surronding-cmds cmd) (surronding-part cmd))])
+(define (generate-mot/data cmds)
+    (list-unbound
+        (for/list ([cmd cmds])
+            (case (cmd-type cmd)
+                [(set) (when (equal? (set-key cmd) "data_motLong")
+                        (src-mot/long (set-value cmd)))]
+                [(set-offset) (generate-mot/root-data cmd)]
+                [(with-surronding) (generate-mot/part-data (surronding-cmds cmd) (surronding-part cmd))])
+    )))
+
+(define (src-generate-mot/record data)
+    (let ([long/set (filter src-mot/long? data)])
+        (if (null? long/set)
+            (src-mot/record '() data)
+            (src-mot/record (src-mot/long-long (car long/set)) (filter (lambda (e) (not (src-mot/long? e))) data)))))
+
+(define (src-write-to record out)
+    (match record
+        [(? src-mot/record?)
+                (let ([data (src-mot/record-data record)])
+                    (displayln data)
+                    ;;; Write motion length
+                    (unless (null? (src-mot/record-long record))
+                        (write-byte bin-bnd/long out)
+                        (write-bytes (uint16->bytes (src-mot/record-long record)) out))
+                    ;;; Write root data
+                    (for (
+                            [$filter (list src-mot/step? src-mot/posx? src-mot/posy?)]
+                            [$con (list uint16->bytes int16->bytes int16->bytes)]
+                            [$bin (list bin-mot/step bin-mot/posx bin-mot/posy)])
+                        (for ([$item (filter $filter data)])
+                            (write-byte $bin out)
+                            (write-byte (src-mot/root-data-frame $item) out)
+                            (write-bytes ($con (src-mot/root-data-value $item)) out)))
+                    ;;; Write part data
+                    (for (
+                            [$filter (list
+                                        src-mot/part/dir?
+                                        src-mot/part/dis?
+                                        src-mot/part/angle?
+                                        src-mot/part/picture?
+                                        src-mot/part/scalex?
+                                        src-mot/part/scaley?)]
+                            [$con (list
+                                    int32->bytes
+                                    int32->bytes
+                                    int16->bytes
+                                    int16->bytes
+                                    int16->bytes
+                                    int16->bytes)]
+                            [$bin (list
+                                    bin-mot/part-pos-dir
+                                    bin-mot/part-pos-dis
+                                    bin-mot/part-angle
+                                    bin-mot/part-picture
+                                    bin-mot/part-scalex
+                                    bin-mot/part-scaley)])
+                        (for ([$item (filter $filter data)])
+                            (write-byte $bin out)
+                            (write-byte (src-mot/part-data-frame $item) out)
+                            (write-byte (src-mot/part-data-part $item) out)
+                            (write-bytes ($con (src-mot/part-data-value $item)) out)))
+                    ;;; EOF
+                    (write-byte bin-eof out)
+                )]
     ))
+
+(define (uint16->bytes n)
+    (bytes
+        (bitwise-and (arithmetic-shift n -8) 255)
+        (bitwise-and n 255)))
+(define (uint32->bytes n)
+    (bytes
+        (bitwise-and (arithmetic-shift n -24) 255)
+        (bitwise-and (arithmetic-shift n -16) 255)
+        (bitwise-and (arithmetic-shift n -8) 255)
+        (bitwise-and n 255)))
+
+(define (int16->bytes n)
+    (define m (+ n #x7ff))
+    (uint16->bytes m))
+(define (int32->bytes n)
+    (define m (+ n #x7ffffff))
+    (uint32->bytes m))
+
+(define (list-unbound lst)
+    (match lst
+        [(? null?) '()]
+        [(? pair?) (append (list-unbound (car lst)) (list-unbound (cdr lst)))]
+        [else (list lst)]))
