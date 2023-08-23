@@ -7,3 +7,8 @@ Documentation in progress. May be written roughly after the project is done.
 ## Requirement
 
 [Racket](https://racket-lang.org/) is required.
+
+## Sample
+```bash
+racket motc.rkt -o ./Wait.mot /www/CrackleCradle170416/Chara/Motion/Bomb/Wait.txt
+```

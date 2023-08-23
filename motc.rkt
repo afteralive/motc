@@ -6,32 +6,35 @@
 ;;;
 
 (require
+    racket/cmdline
+    racket/string
+
     "parser.rkt"
     "writer.rkt")
 
-;;; basic forms:
-;;; X=Y;
-;;; X[I]=Y;
-;;; with(Process[I]) {...}
+;;; TODO: Expand Command-line interface
 
-(define ?sample-code "data_motLong = 10;
-data_motStep[0] = 0;
-data_motPosX[0] = 36;
-data_motPosY[0] = 28;
-data_motStep[1] = 10;
-data_motPosX[1] = 36;
-data_motPosY[1] = 28;
-with(Process[0]){
-data_motPartAngle[0] = 4;
-data_motPartAngle[1] = 4;
-}
-with(Process[1]){
-}
-with(Process[2]){
-data_motPartPosDir[0] = 165.57;
-data_motPartPosDis[0] = 70.22;
-data_motPartPosDir[1] = 165.57;
-data_motPartPosDis[1] = 70.22;
-}")
+(define output-path (make-parameter '()))
 
-;;; TODO: Command-line interface
+(define target
+    (command-line
+        #:program "motc"
+        #:once-any
+            [("-o") outpath
+                "Output file" 
+                (output-path outpath)]
+        #:args (filename)
+        filename))
+
+(when (null? (output-path))
+    (output-path (regexp-replace #rx".txt$" target ".mot")))
+
+(let ([out (open-output-file (output-path) #:exists 'replace)])
+    (src-write-to 
+        (src-generate-mot/record
+            (generate-mot/data
+                (src-parse
+                    (open-input-file
+                        target))))
+    out)
+    (close-output-port out))

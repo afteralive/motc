@@ -87,7 +87,6 @@
     (match record
         [(? src-mot/record?)
                 (let ([data (src-mot/record-data record)])
-                    (displayln data)
                     ;;; Write motion length
                     (unless (null? (src-mot/record-long record))
                         (write-byte bin-bnd/long out)
