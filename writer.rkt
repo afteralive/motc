@@ -47,22 +47,26 @@
 (define (surronding-cmds cmd)
     (caddr cmd))
 
+(define mot/part/attribute-mapping
+    (list
+        (cons "data_motPartPosDir" src-mot/part/dir)
+        (cons "data_motPartPosDis" src-mot/part/dis)
+        (cons "data_motPartAngle" src-mot/part/angle)
+        (cons "data_motPartScaleX" src-mot/part/scalex) 
+        (cons "data_motPartScaleY" src-mot/part/scaley)
+        (cons "data_motPartPicture" src-mot/part/picture)))
 (define (generate-mot/part-data cmds part)
     (for/list ([cmd cmds])
-        (case (offset-key cmd)
-            [("data_motPartPosDir") (src-mot/part/dir part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartPosDis") (src-mot/part/dis part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartAngle") (src-mot/part/angle part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartScaleX") (src-mot/part/scalex part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartScaleY") (src-mot/part/scaley part (offset-frame cmd) (offset-value cmd))]
-            [("data_motPartPicture") (src-mot/part/picture part (offset-frame cmd) (offset-value cmd))]
-        )))
-(define (generate-mot/root-data cmd)
-    (case (offset-key cmd)
-        [("data_motStep") (src-mot/step (offset-frame cmd) (offset-value cmd))]
-        [("data_motPosX") (src-mot/posx (offset-frame cmd) (offset-value cmd))]
-        [("data_motPosY") (src-mot/posy (offset-frame cmd) (offset-value cmd))]
+        ((cdr (assoc (offset-key cmd) mot/part/attribute-mapping)) part (offset-frame cmd) (offset-value cmd))
     ))
+(define mot/root/attribute-mapping
+    (list
+        (cons "data_motStep" src-mot/step)
+        (cons "data_motPosX" src-mot/posx)
+        (cons "data_motPosY" src-mot/posy)))
+(define (generate-mot/root-data cmd)
+    ((cdr (assoc (offset-key cmd) mot/root/attribute-mapping)) (offset-frame cmd) (offset-value cmd))
+)
 (define (generate-mot/data cmds)
     (list-unbound
         (for/list ([cmd cmds])
