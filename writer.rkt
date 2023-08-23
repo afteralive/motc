@@ -8,16 +8,19 @@
 (require
     racket/match
 
+    "helper.rkt"
     "consts.rkt")
 
 (struct src-mot/long (long) #:transparent)
 
-(struct src-mot/root-data (frame value) #:transparent)
+(struct src-data (frame value) #:transparent)
+
+(struct src-mot/root-data src-data () #:transparent)
 (struct src-mot/step src-mot/root-data () #:transparent)
 (struct src-mot/posx src-mot/root-data () #:transparent)
 (struct src-mot/posy src-mot/root-data () #:transparent)
 
-(struct src-mot/part-data (part frame value) #:transparent)
+(struct src-mot/part-data src-data (part) #:transparent)
 (struct src-mot/part/dir src-mot/part-data () #:transparent)
 (struct src-mot/part/dis src-mot/part-data () #:transparent)
 (struct src-mot/part/angle src-mot/part-data () #:transparent)
@@ -57,7 +60,7 @@
         (cons "data_motPartPicture" src-mot/part/picture)))
 (define (generate-mot/part-data cmds part)
     (for/list ([cmd cmds])
-        ((cdr (assoc (offset-key cmd) mot/part/attribute-mapping)) part (offset-frame cmd) (offset-value cmd))
+        ((cdr (assoc (offset-key cmd) mot/part/attribute-mapping)) (offset-frame cmd) (offset-value cmd) part)
     ))
 (define mot/root/attribute-mapping
     (list
@@ -77,11 +80,66 @@
                 [(with-surronding) (generate-mot/part-data (surronding-cmds cmd) (surronding-part cmd))])
     )))
 
+(define (?assoc lst ele)
+    (let loop ([lft lst])
+        (if ((caar lft) ele)
+            (car lft)
+            (loop (cdr lft)))))
+(define (mot/statement-sorter a b)
+    (define order
+        (list
+            (cons src-mot/step? 0)
+            (cons src-mot/posx? 1)
+            (cons src-mot/posy? 2)
+
+            (cons src-mot/part/dir? 3)
+            (cons src-mot/part/dis? 4)
+            (cons src-mot/part/angle? 5)
+            (cons src-mot/part/picture? 6)
+            (cons src-mot/part/scalex? 7)
+            (cons src-mot/part/scaley? 8)))
+    (if (equal? (src-data-frame a) (src-data-frame b))
+        (<
+            (cdr (?assoc order a))
+            (cdr (?assoc order b)))
+        (< (src-data-frame a) (src-data-frame b))))
+
 (define (src-generate-mot/record data)
     (let ([long/set (filter src-mot/long? data)])
         (if (null? long/set)
             (src-mot/record '() data)
-            (src-mot/record (src-mot/long-long (car long/set)) (filter (lambda (e) (not (src-mot/long? e))) data)))))
+            (src-mot/record
+                (src-mot/long-long (car long/set))
+                (sort
+                    (filter
+                        (lambda (e) (not (src-mot/long? e)))
+                        data)
+                    mot/statement-sorter)))))
+
+(define ((make-root/writer bin con) cmd out)
+    (write-byte bin out)
+    (write-byte (src-data-frame cmd) out)
+    (write-bytes (con (src-data-value cmd)) out))
+(define ((make-part/writer bin con) cmd out)
+    (write-byte bin out)
+    (write-byte (src-data-frame cmd) out)
+    (write-byte (src-mot/part-data-part cmd) out)
+    (write-bytes (con (src-data-value cmd)) out))
+(define mot/writter-mapping
+    (list
+        (cons src-mot/step? (make-root/writer bin-mot/step uint16->bytes))
+        (cons src-mot/posx? (make-root/writer bin-mot/posx int16->bytes))
+        (cons src-mot/posy? (make-root/writer bin-mot/posy int16->bytes))
+
+        (cons src-mot/part/dir? (make-part/writer bin-mot/part-pos-dir int32->bytes))
+        (cons src-mot/part/dis? (make-part/writer bin-mot/part-pos-dis int32->bytes))
+        (cons src-mot/part/angle? (make-part/writer bin-mot/part-angle int16->bytes))
+        (cons src-mot/part/picture? (make-part/writer bin-mot/part-picture int16->bytes))
+        (cons src-mot/part/scalex? (make-part/writer bin-mot/part-scalex int16->bytes))
+        (cons src-mot/part/scaley? (make-part/writer bin-mot/part-scaley int16->bytes))
+    ))
+(define (mot/write-single cmd out)
+    ((cdr (?assoc mot/writter-mapping cmd)) cmd out))
 
 (define (src-write-to record out)
     (match record
@@ -91,65 +149,13 @@
                     (unless (null? (src-mot/record-long record))
                         (write-byte bin-bnd/long out)
                         (write-bytes (uint16->bytes (src-mot/record-long record)) out))
-                    ;;; Write root data
-                    (for (
-                            [$filter (list src-mot/step? src-mot/posx? src-mot/posy?)]
-                            [$con (list uint16->bytes int16->bytes int16->bytes)]
-                            [$bin (list bin-mot/step bin-mot/posx bin-mot/posy)])
-                        (for ([$item (filter $filter data)])
-                            (write-byte $bin out)
-                            (write-byte (src-mot/root-data-frame $item) out)
-                            (write-bytes ($con (src-mot/root-data-value $item)) out)))
-                    ;;; Write part data
-                    (for (
-                            [$filter (list
-                                        src-mot/part/dir?
-                                        src-mot/part/dis?
-                                        src-mot/part/angle?
-                                        src-mot/part/picture?
-                                        src-mot/part/scalex?
-                                        src-mot/part/scaley?)]
-                            [$con (list
-                                    int32->bytes
-                                    int32->bytes
-                                    int16->bytes
-                                    int16->bytes
-                                    int16->bytes
-                                    int16->bytes)]
-                            [$bin (list
-                                    bin-mot/part-pos-dir
-                                    bin-mot/part-pos-dis
-                                    bin-mot/part-angle
-                                    bin-mot/part-picture
-                                    bin-mot/part-scalex
-                                    bin-mot/part-scaley)])
-                        (for ([$item (filter $filter data)])
-                            (write-byte $bin out)
-                            (write-byte (src-mot/part-data-frame $item) out)
-                            (write-byte (src-mot/part-data-part $item) out)
-                            (write-bytes ($con (src-mot/part-data-value $item)) out)))
+                    ;;; Write data
+                    (for ([cmd data])
+                        (mot/write-single cmd out))
                     ;;; EOF
                     (write-byte bin-eof out)
                 )]
     ))
-
-(define (uint16->bytes n)
-    (bytes
-        (bitwise-and (arithmetic-shift n -8) 255)
-        (bitwise-and n 255)))
-(define (uint32->bytes n)
-    (bytes
-        (bitwise-and (arithmetic-shift n -24) 255)
-        (bitwise-and (arithmetic-shift n -16) 255)
-        (bitwise-and (arithmetic-shift n -8) 255)
-        (bitwise-and n 255)))
-
-(define (int16->bytes n)
-    (define m (+ n #x7ff))
-    (uint16->bytes m))
-(define (int32->bytes n)
-    (define m (+ n #x7ffffff))
-    (uint32->bytes m))
 
 (define (list-unbound lst)
     (match lst
