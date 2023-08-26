@@ -7,6 +7,7 @@
 
 (require
     racket/match
+    racket/list
 
     "helper.rkt"
     "consts.rkt")
@@ -71,7 +72,7 @@
     ((cdr (assoc (offset-key cmd) mot/root/attribute-mapping)) (offset-frame cmd) (offset-value cmd))
 )
 (define (generate-mot/data cmds)
-    (list-unbound
+    (flatten
         (for/list ([cmd cmds])
             (case (cmd-type cmd)
                 [(set) (when (equal? (set-key cmd) "data_motLong")
@@ -156,9 +157,3 @@
                     (write-byte bin-eof out)
                 )]
     ))
-
-(define (list-unbound lst)
-    (match lst
-        [(? null?) '()]
-        [(? pair?) (append (list-unbound (car lst)) (list-unbound (cdr lst)))]
-        [else (list lst)]))
