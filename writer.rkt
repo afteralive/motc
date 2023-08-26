@@ -180,7 +180,7 @@
                         data)
                     bnd/statement-sorter)))))
 
-;;; Writters
+;;; Writers
 (define ((make-root/writer bin con) cmd out)
     (write-byte bin out)
     (write-byte (src-data-frame cmd) out)
@@ -191,7 +191,7 @@
     (write-byte (src-mot/part-data-part cmd) out)
     (write-bytes (con (src-data-value cmd)) out))
 
-(define mot/writter-mapping
+(define mot/writer-mapping
     (list
         (cons src-mot/step? (make-root/writer bin-mot/step uint16->bytes))
         (cons src-mot/posx? (make-root/writer bin-mot/posx int16->bytes))
@@ -205,16 +205,16 @@
         (cons src-mot/part/scaley? (make-part/writer bin-mot/part-scaley int16->bytes))
     ))
 (define (mot/write-single cmd out)
-    ((cdr (?assoc mot/writter-mapping cmd)) cmd out))
+    ((cdr (?assoc mot/writer-mapping cmd)) cmd out))
 
-(define bnd/writter-mapping
+(define bnd/writer-mapping
     (list
         (cons src-bnd/step? (make-root/writer bin-bnd/step uint16->bytes))
         (cons src-bnd/posx? (make-root/writer bin-bnd/posx int16->bytes))
         (cons src-bnd/posy? (make-root/writer bin-bnd/posy int16->bytes))
         (cons src-bnd/part? (make-root/writer bin-bnd/part uint16->bytes))))
 (define (bnd/write-single cmd out)
-    ((cdr (?assoc bnd/writter-mapping cmd)) cmd out))
+    ((cdr (?assoc bnd/writer-mapping cmd)) cmd out))
 
 ;;; XXX: union these two similiar conditions?
 (define (src-write-to record out)
