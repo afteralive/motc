@@ -22,18 +22,18 @@
 (struct src-data (frame value) #:transparent)
 
 ;;; Motion data
-(struct src-mot/root-data src-data () #:transparent)
-(struct src-mot/step src-mot/root-data () #:transparent)
-(struct src-mot/posx src-mot/root-data () #:transparent)
-(struct src-mot/posy src-mot/root-data () #:transparent)
+(struct src-mot/root-data src-data ())
+(struct src-mot/step src-mot/root-data ())
+(struct src-mot/posx src-mot/root-data ())
+(struct src-mot/posy src-mot/root-data ())
 
 (struct src-mot/part-data src-data (part) #:transparent)
-(struct src-mot/part/dir src-mot/part-data () #:transparent)
-(struct src-mot/part/dis src-mot/part-data () #:transparent)
-(struct src-mot/part/angle src-mot/part-data () #:transparent)
-(struct src-mot/part/picture src-mot/part-data () #:transparent)
-(struct src-mot/part/scalex src-mot/part-data () #:transparent)
-(struct src-mot/part/scaley src-mot/part-data () #:transparent)
+(struct src-mot/part/dir src-mot/part-data ())
+(struct src-mot/part/dis src-mot/part-data ())
+(struct src-mot/part/angle src-mot/part-data ())
+(struct src-mot/part/picture src-mot/part-data ())
+(struct src-mot/part/scalex src-mot/part-data ())
+(struct src-mot/part/scaley src-mot/part-data ())
 
 ;;; Bind data
 
